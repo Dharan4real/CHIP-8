@@ -226,15 +226,15 @@ impl VirtualMachine {
     fn inst_8XY4(&mut self, reg_vx: u8, reg_vy: u8) {
         let temp = self.registers[reg_vx as usize] as u16 + self.registers[reg_vy as usize] as u16;
 
-        self.set_vf(!(temp > 0xFF));
+        self.set_vf(temp > 0xFF);
 
         self.registers[reg_vx as usize] = (temp & 0x00FF) as u8;
     }
 
     pub fn inst_8XY5(&mut self, reg_vx: u8, reg_vy: u8) {
-        let temp = self.registers[reg_vx as usize] as u16 + !(self.registers[reg_vy as usize] as u16) + 1;
+        let temp = (self.registers[reg_vx as usize] as u16).wrapping_add(!(self.registers[reg_vy as usize] as u16) + 1);
 
-        self.set_vf(temp > 0xFF);
+        self.set_vf(!(temp > 0xFF));
 
         self.registers[reg_vx as usize] = (temp & 0x00FF) as u8;
     }
@@ -248,7 +248,7 @@ impl VirtualMachine {
     }
 
     fn inst_8XY7(&mut self, reg_vx: u8, reg_vy: u8) {
-        let temp = self.registers[reg_vy as usize] as u16 + !(self.registers[reg_vx as usize] as u16) + 1;
+        let temp = (self.registers[reg_vy as usize] as u16).wrapping_add(!(self.registers[reg_vx as usize] as u16) + 1);
 
         self.set_vf(!(temp > 0xFF));
 
@@ -329,20 +329,32 @@ mod tests {
         vm.registers[1] = 155;
 
         vm.inst_8XY4(0, 1);
-
         assert_eq!((vm.registers[0], vm.registers[0xF]), (49, 1));
+        
+        vm.registers[0] = 15;
+        vm.registers[1] = 155;
+
+        vm.inst_8XY4(0, 1);
+        assert_eq!((vm.registers[0], vm.registers[0xF]), (170, 0));
     }
 
     #[test]
-    fn inst_8xy5_test() {
+    fn inst_8xy5_8xy7_test() {
         let mut vm = VirtualMachine::default();
 
         vm.registers[0] = 10;
         vm.registers[1] = 15;
+        
+        vm.inst_8XY5(0, 1);
+        assert_eq!((vm.registers[0], vm.registers[0xF]), (251, 0));
+        vm.inst_8XY7(0, 1);
+        assert_eq!((vm.registers[0], vm.registers[0xF]), (20, 0));
+        
+        vm.registers[0] = 15;
+        vm.registers[1] = 10;
 
         vm.inst_8XY5(0, 1);
-
-        assert_eq!((vm.registers[0], vm.registers[0xF]), (251, 1));
+        assert_eq!((vm.registers[0], vm.registers[0xF]), (5, 1));
     }
 
     #[test]
