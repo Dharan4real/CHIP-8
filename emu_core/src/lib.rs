@@ -1,4 +1,6 @@
 
+use core::num;
+
 use rand;
 
 const RAM_SIZE: usize = 4 * 1024;
@@ -86,6 +88,14 @@ impl VirtualMachine {
         self.memory[start..end].copy_from_slice(rom_data);
     }
 
+    pub fn get_display_pixel(&self, pos_x: usize, pos_y: usize) -> bool {
+        self.graphics[pos_y * SCREEN_WIDTH + pos_x]
+    }
+
+    pub fn set_key(&mut self, key: usize) {
+        self.keypad[key] = true;
+    }
+
     pub fn read(&self, addr: u16) -> u8 {
         self.memory[(addr & 0xFFF) as usize]
     }
@@ -116,7 +126,7 @@ impl VirtualMachine {
     pub fn execute(&mut self) {
         let opcode = self.fetch();
 
-        let dis: (u8, u8, u8, u8) = (
+        let dis = (
             (opcode & 0xF000) as u8, 
             (opcode & 0x0F00) as u8, 
             (opcode & 0x00F0) as u8, 
@@ -183,19 +193,19 @@ impl VirtualMachine {
 
     fn inst_3XNN(&mut self, reg_vx: u8) {
         if self.registers[reg_vx as usize] == (self.fetch() & 0x00FF) as u8 {
-            self.reg_pc += 1;
+            self.reg_pc += 2;
         }
     }
 
     fn inst_4XNN(&mut self, reg_vx: u8) {
         if self.registers[reg_vx as usize] != (self.fetch() & 0x00FF) as u8 {
-            self.reg_pc += 1;
+            self.reg_pc += 2;
         }
     }
     
     fn inst_5XY0(&mut self, reg_vx: u8, reg_vy: u8) {
         if self.registers[reg_vx as usize] == self.registers[reg_vy as usize] {
-            self.reg_pc += 1;
+            self.reg_pc += 2;
         }
     }
 
@@ -265,7 +275,7 @@ impl VirtualMachine {
 
     fn inst_9XY0(&mut self, reg_vx: u8, reg_vy: u8) {
         if self.registers[reg_vx as usize] != self.registers[reg_vy as usize] {
-            self.reg_pc += 1;
+            self.reg_pc += 2;
         }
     }
 
@@ -281,39 +291,89 @@ impl VirtualMachine {
         self.registers[reg_vx as usize] = rand::random::<u8>() & (self.fetch() & 0xFF) as u8;
     }
 
-    fn inst_DXYN(&mut self, reg_vx: u8, reg_vy: u8) {
-        // let mut coordinate_x = self.registers[reg_vx as usize] & 63;
-        // let mut coordinate_y = self.registers[reg_vy as usize] & 31;
+    fn inst_DXYN(&mut self, reg_vx: u8, reg_vy: u8, num_rows: u8) {
+        let mut coordinate_x = self.registers[reg_vx as usize] as usize & SCREEN_WIDTH;
+        let mut coordinate_y = self.registers[reg_vy as usize] as usize & SCREEN_HEIGHT;
 
-        // let bytes = self.fetch() & 0x0F;
-        // let sprite_data = &self.memory[(self.reg_i as usize)..(bytes as usize)];
+        let mut flipped = false;
 
-        // self.registers[0xF] = 0;
+        for y_line in 0..num_rows {
+            let addr = self.reg_i + y_line as u16;
+            let pixels = self.memory[addr as usize];
 
-        // for pixel in sprite_data {
-        //     for i in 0..=7 {
-        //         if pixel << i != 0 {
-        //             if self.graphics[coordinate_x as usize][coordinate_y as usize] {
-        //                 self.registers[0xF] = 1;
-        //             }
-        //             self.graphics[coordinate_x as usize][coordinate_y as usize] ^= true;
-        //         }
-        //         coordinate_x += 1;
-
-        //         if coordinate_x == 63 {
-        //             continue;
-        //         }
-        //     }
-        //     coordinate_y += 1;
-
-        //     if coordinate_y == 31 {
-        //         continue;
-        //     }
-        // }
+            for x_line in 0..8 {
+                if (pixels & (0b1000_0000 >> x_line)) != 0 {
+                    let graphics_index = coordinate_x + coordinate_y * SCREEN_WIDTH;
+                    flipped |= self.graphics[graphics_index];
+                    self.graphics[graphics_index] ^= true;
+                }
+            }
+        }
     }
 
     fn inst_EX9E(&mut self, reg_vx: u8) {
-        
+        if self.keypad[self.registers[reg_vx as usize] as usize] {
+            self.reg_pc += 2;
+        }
+    }
+
+    fn inst_EXA1(&mut self, reg_vx: u8) {
+        if !self.keypad[self.registers[reg_vx as usize] as usize] {
+            self.reg_pc += 2;
+        }
+    }
+
+    fn inst_FX07(&mut self, reg_vx: u8) {
+        self.registers[reg_vx as usize] = self.delay_timer;
+    }
+
+    fn inst_FX0A(&mut self, reg_vx: u8) {
+        let mut pressed = false;
+        for i in 0..self.keypad.len() {
+            if self.keypad[i] {
+                self.registers[reg_vx as usize] = i as u8;
+                pressed = true;
+            }
+            if !pressed {
+                self.reg_pc -= 2;
+            }
+        }
+    }
+
+    fn inst_FX15(&mut self, reg_vx: u8) {
+        self.delay_timer = self.registers[reg_vx as usize];
+    }
+
+    fn inst_FX18(&mut self, reg_vx: u8) {
+        self.sound_timer = self.registers[reg_vx as usize];
+    }
+
+    fn inst_FX1E(&mut self, reg_vx: u8) {
+        self.reg_i += self.registers[reg_vx as usize] as u16;
+    }
+
+    fn inst_FX29(&mut self, reg_vx: u8) {
+        self.reg_i = self.registers[reg_vx as usize] as u16 * 5;
+    }
+
+    fn inst_FX33(&mut self, reg_vx: u8) {
+        self.memory[self.reg_i as usize] = (self.registers[reg_vx as usize] as f32 / 100.0).floor() as u8;
+        self.memory[(self.reg_i + 1) as usize] = ((self.registers[reg_vx as usize] as f32 / 10.0) % 10.0) as u8;
+        self.memory[(self.reg_i + 2) as usize] = self.registers[reg_vx as usize] % 10;
+    }
+
+    fn inst_FX55(&mut self, reg_vx: u8) {
+        for i in 0..=reg_vx as usize {
+            self.memory[self.reg_i as usize + i] = self.registers[i];
+        }
+        self.reg_i += reg_vx as u16 + 1;
+    }
+
+    fn inst_FX65(&mut self, reg_vx: u8) {
+        for i in 0..=reg_vx as usize {
+            self.registers[i] = self.memory[self.reg_i as usize + i];
+        }
+        self.reg_i += reg_vx as u16 + 1;
     }
 }
 
