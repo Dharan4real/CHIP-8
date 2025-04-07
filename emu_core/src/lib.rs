@@ -1,6 +1,4 @@
 
-use core::num;
-
 use rand;
 
 const RAM_SIZE: usize = 4 * 1024;
@@ -96,33 +94,6 @@ impl VirtualMachine {
         self.keypad[key] = true;
     }
 
-    pub fn read(&self, addr: u16) -> u8 {
-        self.memory[(addr & 0xFFF) as usize]
-    }
-
-    pub fn write(&mut self, addr: u16, data: u8) {
-        self.memory[(addr & 0xFFF) as usize] = data;
-    }
-
-    pub fn push_to_stack(&mut self, address: u16) {
-        self.stack[self.reg_stack_ptr as usize] = address;
-        self.reg_stack_ptr += 1;
-    }
-
-    pub fn pop_from_stack(&mut self) -> u16 {
-        self.reg_stack_ptr -= 1;
-        self.stack[self.reg_stack_ptr as usize]
-    }
-    
-    pub fn fetch(&mut self) -> u16 {
-        let hi = self.read(self.reg_pc) as u16;
-        self.reg_pc += 1;
-        let lo = self.read(self.reg_pc) as u16;
-        self.reg_pc += 1;
-
-        hi << 8 | lo
-    } 
-
     pub fn execute(&mut self) {
         let opcode = self.fetch();
 
@@ -150,6 +121,33 @@ impl VirtualMachine {
 
 //private
 impl VirtualMachine {
+    fn read(&self, addr: u16) -> u8 {
+        self.memory[(addr & 0xFFF) as usize]
+    }
+
+    fn write(&mut self, addr: u16, data: u8) {
+        self.memory[(addr & 0xFFF) as usize] = data;
+    }
+
+    fn push_to_stack(&mut self, address: u16) {
+        self.stack[self.reg_stack_ptr as usize] = address;
+        self.reg_stack_ptr += 1;
+    }
+
+    fn pop_from_stack(&mut self) -> u16 {
+        self.reg_stack_ptr -= 1;
+        self.stack[self.reg_stack_ptr as usize]
+    }
+    
+    fn fetch(&mut self) -> u16 {
+        let hi = self.read(self.reg_pc) as u16;
+        self.reg_pc += 1;
+        let lo = self.read(self.reg_pc) as u16;
+        self.reg_pc += 1;
+
+        hi << 8 | lo
+    } 
+
     fn set_vf(&mut self, v: bool) {
         if v {
             self.registers[0xF] = 0x1;
@@ -162,6 +160,8 @@ impl VirtualMachine {
 
     }
 }
+
+//opcode fucntions
 #[allow(non_snake_case)]
 impl VirtualMachine {
     //execute machine language instruction at addr NNN
@@ -291,23 +291,28 @@ impl VirtualMachine {
         self.registers[reg_vx as usize] = rand::random::<u8>() & (self.fetch() & 0xFF) as u8;
     }
 
-    fn inst_DXYN(&mut self, reg_vx: u8, reg_vy: u8, num_rows: u8) {
-        let mut coordinate_x = self.registers[reg_vx as usize] as usize & SCREEN_WIDTH;
-        let mut coordinate_y = self.registers[reg_vy as usize] as usize & SCREEN_HEIGHT;
-
+    fn inst_DXYN(&mut self, reg_vx: u8, reg_vy: u8, num_rows: u8) {        
         let mut flipped = false;
-
+        
         for y_line in 0..num_rows {
             let addr = self.reg_i + y_line as u16;
             let pixels = self.memory[addr as usize];
-
+            
             for x_line in 0..8 {
                 if (pixels & (0b1000_0000 >> x_line)) != 0 {
+                    let coordinate_x = self.registers[reg_vx as usize] as usize & SCREEN_WIDTH;
+                    let coordinate_y = self.registers[reg_vy as usize] as usize & SCREEN_HEIGHT;
                     let graphics_index = coordinate_x + coordinate_y * SCREEN_WIDTH;
                     flipped |= self.graphics[graphics_index];
                     self.graphics[graphics_index] ^= true;
                 }
             }
+        }
+
+        if flipped {
+            self.set_vf(true);
+        } else {
+            self.set_vf(false);
         }
     }
 

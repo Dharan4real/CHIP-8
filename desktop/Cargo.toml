@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 emu_core = { path = "../emu_core" }
+egui = "0.31.1"
+eframe = "0.31.1"
