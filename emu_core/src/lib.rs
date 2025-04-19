@@ -109,15 +109,41 @@ impl VirtualMachine {
         );
 
         match dis {
-            (0, 0, 0xE, 0xE) => self.inst_00EE(),
-            (0, 0, 0xE, 0) => self.inst_00E0(),
-            (0, _, _, _) => self.inst_0NNN(),
+            (0x0, 0x0, 0xE, 0xE) => self.inst_00EE(),
+            (0x0, 0x0, 0xE, 0x0) => self.inst_00E0(),
+            (0x0, _, _, _) => self.inst_0NNN(),
             (0x1, _, _, _) => self.inst_1NNN(),
             (0x2, _, _, _) => self.inst_2NNN(),
             (0x3, vx, _, _) => self.inst_3XNN(vx),
             (0x4, vx, _, _) => self.inst_4XNN(vx),
             (0x5, vx, vy, 0x0) => self.inst_5XY0(vx, vy),
             (0x6, vx, _, _) => self.inst_6XNN(vx),
+            (0x7, vx, _, _) => self.inst_7XNN(vx),
+            (0x8, vx, vy, 0x0) => self.inst_8XY0(vx, vy),
+            (0x8, vx, vy, 0x1) => self.inst_8XY1(vx, vy),
+            (0x8, vx, vy, 0x2) => self.inst_8XY2(vx, vy),
+            (0x8, vx, vy, 0x3) => self.inst_8XY3(vx, vy),
+            (0x8, vx, vy, 0x4) => self.inst_8XY4(vx, vy),
+            (0x8, vx, vy, 0x5) => self.inst_8XY5(vx, vy),
+            (0x8, vx, vy, 0x6) => self.inst_8XY6(vx, vy),
+            (0x8, vx, vy, 0x7) => self.inst_8XY7(vx, vy),
+            (0x8, vx, vy, 0xE) => self.inst_8XYE(vx, vy),
+            (0x9, vx, vy, 0x0) => self.inst_9XY0(vx, vy),
+            (0xA, _, _, _) => self.inst_ANNN(),
+            (0xB, _, _, _) => self.inst_BNNN(),
+            (0xC, vx, _, _) => self.inst_CXNN(vx),
+            (0xD, vx, vy, rows) => self.inst_DXYN(vx, vy, rows),
+            (0xE, vx, 0x9, 0xE) => self.inst_EX9E(vx),
+            (0xE, vx, 0xA, 0x1) => self.inst_EXA1(vx),
+            (0xF, vx, 0x0, 0x7) => self.inst_FX07(vx),
+            (0xF, vx, 0x0, 0xA) => self.inst_FX0A(vx),
+            (0xF, vx, 0x1, 0x5) => self.inst_FX15(vx),
+            (0xF, vx, 0x1, 0x8) => self.inst_FX18(vx),
+            (0xF, vx, 0x1, 0xE) => self.inst_FX1E(vx),
+            (0xF, vx, 0x2, 0x9) => self.inst_FX29(vx),
+            (0xF, vx, 0x3, 0x3) => self.inst_FX33(vx),
+            (0xF, vx, 0x5, 0x5) => self.inst_FX55(vx),
+            (0xF, vx, 0x6, 0x5) => self.inst_FX65(vx),
             _ => ()
         };
     }
@@ -129,12 +155,12 @@ impl VirtualMachine {
         self.memory[(addr & 0xFFF) as usize]
     }
 
-    fn write(&mut self, addr: u16, data: u8) {
-        self.memory[(addr & 0xFFF) as usize] = data;
-    }
+    // fn write(&mut self, addr: u16, data: u8) {
+    //     self.memory[(addr & 0xFFF) as usize] = data;
+    // }
 
     fn push_to_stack(&mut self, address: u16) {
-        self.stack[self.reg_stack_ptr as usize] = address;
+        self.stack[self.reg_stack_ptr as usize % 12] = address;
         self.reg_stack_ptr += 1;
     }
 
@@ -158,10 +184,6 @@ impl VirtualMachine {
         } else {
             self.registers[0xF] = 0;
         }
-    }
-
-    fn key_map(&mut self) {
-
     }
 }
 
@@ -269,7 +291,7 @@ impl VirtualMachine {
         self.registers[reg_vx as usize] = (temp & 0xFF) as u8;
     }
 
-    fn inst_7XYE(&mut self, reg_vx: u8, reg_vy: u8) {
+    fn inst_8XYE(&mut self, reg_vx: u8, reg_vy: u8) {
         let temp = (self.registers[reg_vy as usize] << 1) as u16;
 
         self.set_vf((self.registers[reg_vy as usize] & 0x80) != 0);
