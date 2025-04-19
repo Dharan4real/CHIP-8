@@ -86,12 +86,16 @@ impl VirtualMachine {
         self.memory[start..end].copy_from_slice(rom_data);
     }
 
+    pub fn get_display(&self) -> &[bool] {
+        &self.graphics
+    }
+
     pub fn get_display_pixel(&self, pos_x: usize, pos_y: usize) -> bool {
         self.graphics[pos_y * SCREEN_WIDTH + pos_x]
     }
 
-    pub fn set_key(&mut self, key: usize) {
-        self.keypad[key] = true;
+    pub fn set_key(&mut self, key: usize, val: bool) {
+        self.keypad[key] = val;
     }
 
     pub fn execute(&mut self) {
