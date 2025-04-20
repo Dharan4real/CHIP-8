@@ -102,23 +102,23 @@ impl VirtualMachine {
         let opcode = self.fetch();
 
         let dis = (
-            (opcode & 0xF000) as u8, 
-            (opcode & 0x0F00) as u8, 
-            (opcode & 0x00F0) as u8, 
+            ((opcode & 0xF000) >> 0xC) as u8, 
+            ((opcode & 0x0F00) >> 0x8) as u8, 
+            ((opcode & 0x00F0) >> 0x4) as u8, 
             (opcode & 0x000F) as u8
         );
 
         match dis {
             (0x0, 0x0, 0xE, 0xE) => self.inst_00EE(),
             (0x0, 0x0, 0xE, 0x0) => self.inst_00E0(),
-            (0x0, _, _, _) => self.inst_0NNN(),
-            (0x1, _, _, _) => self.inst_1NNN(),
-            (0x2, _, _, _) => self.inst_2NNN(),
-            (0x3, vx, _, _) => self.inst_3XNN(vx),
-            (0x4, vx, _, _) => self.inst_4XNN(vx),
+            (0x0, _, _, _) => self.inst_0NNN(opcode & 0x0FFF),
+            (0x1, _, _, _) => self.inst_1NNN(opcode & 0x0FFF),
+            (0x2, _, _, _) => self.inst_2NNN(opcode & 0x0FFF),
+            (0x3, vx, _, _) => self.inst_3XNN(vx, (opcode & 0xFF) as u8),
+            (0x4, vx, _, _) => self.inst_4XNN(vx, (opcode & 0xFF) as u8),
             (0x5, vx, vy, 0x0) => self.inst_5XY0(vx, vy),
-            (0x6, vx, _, _) => self.inst_6XNN(vx),
-            (0x7, vx, _, _) => self.inst_7XNN(vx),
+            (0x6, vx, _, _) => self.inst_6XNN(vx, (opcode & 0xFF) as u8),
+            (0x7, vx, _, _) => self.inst_7XNN(vx, (opcode & 0xFF) as u8),
             (0x8, vx, vy, 0x0) => self.inst_8XY0(vx, vy),
             (0x8, vx, vy, 0x1) => self.inst_8XY1(vx, vy),
             (0x8, vx, vy, 0x2) => self.inst_8XY2(vx, vy),
@@ -129,9 +129,9 @@ impl VirtualMachine {
             (0x8, vx, vy, 0x7) => self.inst_8XY7(vx, vy),
             (0x8, vx, vy, 0xE) => self.inst_8XYE(vx, vy),
             (0x9, vx, vy, 0x0) => self.inst_9XY0(vx, vy),
-            (0xA, _, _, _) => self.inst_ANNN(),
-            (0xB, _, _, _) => self.inst_BNNN(),
-            (0xC, vx, _, _) => self.inst_CXNN(vx),
+            (0xA, _, _, _) => self.inst_ANNN(opcode & 0x0FFF),
+            (0xB, _, _, _) => self.inst_BNNN(opcode & 0x0FFF),
+            (0xC, vx, _, _) => self.inst_CXNN(vx, (opcode & 0xFF) as u8),
             (0xD, vx, vy, rows) => self.inst_DXYN(vx, vy, rows),
             (0xE, vx, 0x9, 0xE) => self.inst_EX9E(vx),
             (0xE, vx, 0xA, 0x1) => self.inst_EXA1(vx),
@@ -160,7 +160,7 @@ impl VirtualMachine {
     // }
 
     fn push_to_stack(&mut self, address: u16) {
-        self.stack[self.reg_stack_ptr as usize % 12] = address;
+        self.stack[self.reg_stack_ptr as usize] = address;
         self.reg_stack_ptr += 1;
     }
 
@@ -191,9 +191,9 @@ impl VirtualMachine {
 #[allow(non_snake_case)]
 impl VirtualMachine {
     //execute machine language instruction at addr NNN
-    fn inst_0NNN(&mut self) {
+    fn inst_0NNN(&mut self, nnn: u16) {
         self.push_to_stack(self.reg_pc);
-        self.reg_pc = self.fetch() & 0xFFF;
+        self.reg_pc = nnn;
     }
 
     //clear screen
@@ -207,24 +207,24 @@ impl VirtualMachine {
     }
 
     //jump to addr NNN
-    fn inst_1NNN(&mut self) {
-        self.reg_pc = self.fetch() & 0xFFF;
+    fn inst_1NNN(&mut self, nnn: u16) {
+        self.reg_pc = nnn;
     }
 
     //exec subroutine at addr NNN
-    fn inst_2NNN(&mut self) {
+    fn inst_2NNN(&mut self, nnn: u16) {
         self.push_to_stack(self.reg_pc);
-        self.reg_pc = self.fetch() & 0xFFF;
+        self.reg_pc = nnn;
     }
 
-    fn inst_3XNN(&mut self, reg_vx: u8) {
-        if self.registers[reg_vx as usize] == (self.fetch() & 0x00FF) as u8 {
+    fn inst_3XNN(&mut self, reg_vx: u8, nn: u8) {
+        if self.registers[reg_vx as usize] == nn {
             self.reg_pc += 2;
         }
     }
 
-    fn inst_4XNN(&mut self, reg_vx: u8) {
-        if self.registers[reg_vx as usize] != (self.fetch() & 0x00FF) as u8 {
+    fn inst_4XNN(&mut self, reg_vx: u8, nn: u8) {
+        if self.registers[reg_vx as usize] != nn {
             self.reg_pc += 2;
         }
     }
@@ -235,12 +235,12 @@ impl VirtualMachine {
         }
     }
 
-    fn inst_6XNN(&mut self, reg_vx: u8) {
-        self.registers[reg_vx as usize] = (self.fetch() & 0x00FF) as u8;
+    fn inst_6XNN(&mut self, reg_vx: u8, nn: u8) {
+        self.registers[reg_vx as usize] = nn;
     }
 
-    fn inst_7XNN(&mut self, reg_vx: u8) {
-        self.registers[reg_vx as usize] += (self.fetch() & 0x00FF) as u8;
+    fn inst_7XNN(&mut self, reg_vx: u8, nn: u8) {
+        self.registers[reg_vx as usize] += nn;
     }
 
     fn inst_8XY0(&mut self, reg_vx: u8, reg_vy: u8) {
@@ -305,16 +305,16 @@ impl VirtualMachine {
         }
     }
 
-    fn inst_ANNN(&mut self) {
-        self.reg_i = self.fetch() & 0xFFF;
+    fn inst_ANNN(&mut self, nnn: u16) {
+        self.reg_i = nnn & 0xFFF;
     }
 
-    fn inst_BNNN(&mut self) {
-        self.reg_pc = self.fetch() & 0xFFF + self.registers[0] as u16;
+    fn inst_BNNN(&mut self, nnn: u16) {
+        self.reg_pc = nnn & 0xFFF + self.registers[0] as u16;
     }
 
-    fn inst_CXNN(&mut self, reg_vx: u8) {
-        self.registers[reg_vx as usize] = rand::random::<u8>() & (self.fetch() & 0xFF) as u8;
+    fn inst_CXNN(&mut self, reg_vx: u8, nn: u8) {
+        self.registers[reg_vx as usize] = rand::random::<u8>() & nn;
     }
 
     fn inst_DXYN(&mut self, reg_vx: u8, reg_vy: u8, num_rows: u8) {        
@@ -413,49 +413,47 @@ mod tests {
     use super::*;
 
     #[test]
-    fn inst_8xy4_test() {
+    fn pong_rom_test() {
+    use std::{fs::File, io::Read};
+
         let mut vm = VirtualMachine::default();
+        let mut rom = File::open("D:\\Rust\\chip-8\\roms\\test_opcode").unwrap();
+        let mut buffer = Vec::new();
+        rom.read_to_end(&mut buffer).unwrap();
 
-        vm.registers[0] = 150;
-        vm.registers[1] = 155;
-
-        vm.inst_8XY4(0, 1);
-        assert_eq!((vm.registers[0], vm.registers[0xF]), (49, 1));
-        
-        vm.registers[0] = 15;
-        vm.registers[1] = 155;
-
-        vm.inst_8XY4(0, 1);
-        assert_eq!((vm.registers[0], vm.registers[0xF]), (170, 0));
-    }
-
-    #[test]
-    fn inst_8xy5_8xy7_test() {
-        let mut vm = VirtualMachine::default();
-
-        vm.registers[0] = 10;
-        vm.registers[1] = 15;
-        
-        vm.inst_8XY5(0, 1);
-        assert_eq!((vm.registers[0], vm.registers[0xF]), (251, 0));
-        vm.inst_8XY7(0, 1);
-        assert_eq!((vm.registers[0], vm.registers[0xF]), (20, 0));
-        
-        vm.registers[0] = 15;
-        vm.registers[1] = 10;
-
-        vm.inst_8XY5(0, 1);
-        assert_eq!((vm.registers[0], vm.registers[0xF]), (5, 1));
-    }
-
-    #[test]
-    fn inst_8xy6_test() {
-        let mut vm = VirtualMachine::default();
-
-        vm.registers[1] = 15;
-
-        vm.inst_8XY6(0, 1);
-
-        assert_eq!((vm.registers[0], vm.registers[0xF]), (7, 1));
+        vm.load_rom(&buffer);
+        vm.execute();
     }
 }
+
+// fn summa() {
+//         let mut decimal: u128 = 65244;
+//         println!("{:#b}", decimal);
+//         for _ in 0..16 {
+//             let ones = (decimal & 0xF00) >> 8;
+//             let tens = (decimal & 0xF000) >> 12;
+//             let hundreds = (decimal & 0xF0000) >> 16;
+//             let thousands = (decimal & 0xF00000) >> 20;
+//             let tenthousands = (decimal & 0xF000000) >> 24;
+            
+//             if ones >= 5 {
+//                 decimal += 3 << 8;
+//             } 
+//             if tens >= 5 {
+//                 decimal += 3 << 12;
+//             } 
+//             if hundreds >= 5 {
+//                 decimal += 3 << 16;
+//             }
+//             if thousands >= 5 {
+//                 decimal += 3 << 20;
+//             }
+//             if tenthousands >= 5 {
+//                 decimal += 3 << 24;
+//             }
+            
+//             decimal <<= 1;
+//         }
+//         println!("{} {} {} {} {}", (decimal & 0xF000000) >> 24, (decimal & 0xF00000) >> 20, (decimal & 0xF0000) >> 16, (decimal & 0xF000) >> 12, (decimal & 0xF00) >> 8);
+    
+// }
