@@ -417,7 +417,7 @@ mod tests {
     use std::{fs::File, io::Read};
 
         let mut vm = VirtualMachine::default();
-        let mut rom = File::open("D:\\Rust\\chip-8\\roms\\test_opcode").unwrap();
+        let mut rom = File::open("../roms/test_opcode").unwrap();
         let mut buffer = Vec::new();
         rom.read_to_end(&mut buffer).unwrap();
 
