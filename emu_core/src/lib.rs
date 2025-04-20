@@ -387,10 +387,34 @@ impl VirtualMachine {
         self.reg_i = self.registers[reg_vx as usize] as u16 * 5;
     }
 
+    // fn inst_FX33(&mut self, reg_vx: u8) {
+    //     self.memory[self.reg_i as usize] = (self.registers[reg_vx as usize] as f32 / 100.0).floor() as u8;
+    //     self.memory[(self.reg_i + 1) as usize] = ((self.registers[reg_vx as usize] as f32 / 10.0) % 10.0) as u8;
+    //     self.memory[(self.reg_i + 2) as usize] = self.registers[reg_vx as usize] % 10;
+    // }
+
     fn inst_FX33(&mut self, reg_vx: u8) {
-        self.memory[self.reg_i as usize] = (self.registers[reg_vx as usize] as f32 / 100.0).floor() as u8;
-        self.memory[(self.reg_i + 1) as usize] = ((self.registers[reg_vx as usize] as f32 / 10.0) % 10.0) as u8;
-        self.memory[(self.reg_i + 2) as usize] = self.registers[reg_vx as usize] % 10;
+        let mut decimal = self.registers[reg_vx as usize] as u64;
+        for _ in 0..8 {
+            let ones = (decimal & 0xF00) >> 8;
+            let tens = (decimal & 0xF000) >> 12;
+            let hundreds = (decimal & 0xF0000) >> 16;
+            
+            if ones >= 5 {
+                decimal += 3 << 8;
+            } 
+            if tens >= 5 {
+                decimal += 3 << 12;
+            } 
+            if hundreds >= 5 {
+                decimal += 3 << 16;
+            }
+            
+            decimal <<= 1;
+        }
+        self.memory[self.reg_i as usize] = ((decimal & 0xF0000) >> 16) as u8;
+        self.memory[(self.reg_i + 1) as usize] = ((decimal & 0xF000) >> 12) as u8;
+        self.memory[(self.reg_i + 2) as usize] = ((decimal & 0xF00) >> 8) as u8;
     }
 
     fn inst_FX55(&mut self, reg_vx: u8) {
@@ -424,36 +448,24 @@ mod tests {
         vm.load_rom(&buffer);
         vm.execute();
     }
-}
 
-// fn summa() {
-//         let mut decimal: u128 = 65244;
-//         println!("{:#b}", decimal);
-//         for _ in 0..16 {
-//             let ones = (decimal & 0xF00) >> 8;
-//             let tens = (decimal & 0xF000) >> 12;
-//             let hundreds = (decimal & 0xF0000) >> 16;
-//             let thousands = (decimal & 0xF00000) >> 20;
-//             let tenthousands = (decimal & 0xF000000) >> 24;
+    #[test]
+    fn inst_fx33_test() {
+        let mut vm = VirtualMachine::default();
+        
+        for i in 0..=255 {
+            vm.registers[0]  = i;
+            vm.inst_FX33(0);
             
-//             if ones >= 5 {
-//                 decimal += 3 << 8;
-//             } 
-//             if tens >= 5 {
-//                 decimal += 3 << 12;
-//             } 
-//             if hundreds >= 5 {
-//                 decimal += 3 << 16;
-//             }
-//             if thousands >= 5 {
-//                 decimal += 3 << 20;
-//             }
-//             if tenthousands >= 5 {
-//                 decimal += 3 << 24;
-//             }
-            
-//             decimal <<= 1;
-//         }
-//         println!("{} {} {} {} {}", (decimal & 0xF000000) >> 24, (decimal & 0xF00000) >> 20, (decimal & 0xF0000) >> 16, (decimal & 0xF000) >> 12, (decimal & 0xF00) >> 8);
-    
-// }
+            assert_eq!((
+                vm.memory[vm.reg_i as usize],
+                vm.memory[(vm.reg_i + 1) as usize],
+                vm.memory[(vm.reg_i + 2) as usize]
+            ), (
+                (i as f32 / 100.0).floor() as u8, 
+                ((i as f32 / 10.0) % 10.0) as u8, 
+                i % 10
+            ));
+        }
+    }
+}
