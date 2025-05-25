@@ -41,6 +41,7 @@ pub struct VirtualMachine {
     graphics: [bool; SCREEN_WIDTH * SCREEN_HEIGHT],
 
     keypad: [bool; 16],
+    pub opcode: u16,
 }
 
 impl Default for VirtualMachine {
@@ -59,6 +60,7 @@ impl Default for VirtualMachine {
             delay_timer: 0, 
             sound_timer: 0, graphics: [false; SCREEN_WIDTH * SCREEN_HEIGHT], 
             keypad: [false; 16],
+            opcode: 0x0,
         }
     }
 }
@@ -76,7 +78,7 @@ impl VirtualMachine {
         self.sound_timer = 0;
         self.keypad = [false; 0x10];
         self.memory[..FONTS.len()].copy_from_slice(&FONTS);
-
+        
     } 
 
     pub fn load_rom(&mut self, rom_data: &[u8]) {
@@ -100,6 +102,7 @@ impl VirtualMachine {
 
     pub fn execute(&mut self) {
         let opcode = self.fetch();
+        self.opcode = opcode;
 
         let dis = (
             ((opcode & 0xF000) >> 0xC) as u8, 
@@ -208,7 +211,7 @@ impl VirtualMachine {
 
     //jump to addr NNN
     fn inst_1NNN(&mut self, nnn: u16) {
-        self.reg_pc = nnn;
+        self.reg_pc = nnn & 0xFFF;
     }
 
     //exec subroutine at addr NNN
@@ -240,7 +243,7 @@ impl VirtualMachine {
     }
 
     fn inst_7XNN(&mut self, reg_vx: u8, nn: u8) {
-        self.registers[reg_vx as usize] += nn;
+        self.registers[reg_vx as usize] = self.registers[reg_vx as usize].wrapping_add(nn);
     }
 
     fn inst_8XY0(&mut self, reg_vx: u8, reg_vy: u8) {
@@ -267,7 +270,7 @@ impl VirtualMachine {
         self.registers[reg_vx as usize] = (temp & 0x00FF) as u8;
     }
 
-    pub fn inst_8XY5(&mut self, reg_vx: u8, reg_vy: u8) {
+    fn inst_8XY5(&mut self, reg_vx: u8, reg_vy: u8) {
         let temp = (self.registers[reg_vx as usize] as u16).wrapping_add(!(self.registers[reg_vy as usize] as u16) + 1);
 
         self.set_vf(!(temp > 0xFF));
@@ -317,7 +320,9 @@ impl VirtualMachine {
         self.registers[reg_vx as usize] = rand::random::<u8>() & nn;
     }
 
-    fn inst_DXYN(&mut self, reg_vx: u8, reg_vy: u8, num_rows: u8) {        
+    fn inst_DXYN(&mut self, reg_vx: u8, reg_vy: u8, num_rows: u8) {  
+        let coordinate_x = self.registers[reg_vx as usize] as u16;
+        let coordinate_y = self.registers[reg_vy as usize] as u16;      
         let mut flipped = false;
         
         for y_line in 0..num_rows {
@@ -326,9 +331,9 @@ impl VirtualMachine {
             
             for x_line in 0..8 {
                 if (pixels & (0b1000_0000 >> x_line)) != 0 {
-                    let coordinate_x = self.registers[reg_vx as usize] as usize & SCREEN_WIDTH;
-                    let coordinate_y = self.registers[reg_vy as usize] as usize & SCREEN_HEIGHT;
-                    let graphics_index = coordinate_x + coordinate_y * SCREEN_WIDTH;
+                    let x = (coordinate_x + x_line) as usize % SCREEN_WIDTH;
+                    let y = (coordinate_y + y_line as u16) as usize % SCREEN_HEIGHT;
+                    let graphics_index = x + y * SCREEN_WIDTH;
                     flipped |= self.graphics[graphics_index];
                     self.graphics[graphics_index] ^= true;
                 }
@@ -468,4 +473,21 @@ mod tests {
             ));
         }
     }
+
+    // #[test]
+    // fn opcode_test() {
+    //     use std::{fs::File, io::Read};
+
+    //     let mut vm = VirtualMachine::default();
+    //     let mut rom = File::open("D:\\Rust\\chip-8\\roms\\pong")
+    //         .expect("Unable to open file");
+    //     let mut buffer = Vec::new();
+    //     rom.read_to_end(&mut buffer).unwrap();
+    //     vm.load_rom(&buffer);
+
+    //     for _ in 0..1000 {
+    //         println!("{:#X?}", vm.opcode);
+    //         vm.execute();
+    //     }
+    // }
 }
